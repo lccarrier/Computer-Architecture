@@ -11,6 +11,7 @@ class CPU:
         self.reg = [0] * 8
         self.pc = 0
         self.sp = self.reg[7]
+        self.fl = 0b00000000
 
     def ram_read(self, mar):
         return self.ram[mar]
@@ -27,10 +28,14 @@ class CPU:
         filename = sys.argv[1]
         with open(filename) as f:
             for line in f:
-                if len(line) > 0:
-                    binary_string = line.split(" #")[0]
-                    integer_value = int(binary_string, 2)
-                    program.append(integer_value)
+                if (len(line) > 0):
+                    if "#" not in line:
+                        binary_string = line.strip()
+                    else:
+                        binary_string = line.split(" #")[0].strip()
+                    if binary_string.isnumeric():
+                        integer_value = int(binary_string, 2)
+                        program.append(integer_value)
 
         # For now, we've just hardcoded a program:
 
@@ -56,6 +61,13 @@ class CPU:
         # elif op == "SUB": etc
         elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
+        elif op == "CMP":
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.fl = 0b00000001
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.fl = 0b00000100
+            elif self.reg[reg_a] > self.reg[reg_b]:
+                self.fl = 0b00000010
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -67,7 +79,7 @@ class CPU:
 
         print(f"TRACE: %02X | %02X %02X %02X |" % (
             self.pc,
-            # self.fl,
+            self.fl,
             # self.ie,
             self.ram_read(self.pc),
             self.ram_read(self.pc + 1),
@@ -84,10 +96,15 @@ class CPU:
 
         ldi = 0b10000010
         prn = 0b01000111
+        add = 0b10100000
         mul = 0b10100010
         hlt = 0b00000001
         push = 0b01000101
         pop = 0b01000110
+        cmp = 0b10100111
+        jmp = 0b01010100
+        jeq = 0b01010101
+        jne = 0b01010110
 
         while True:
             ir = self.ram[self.pc]
@@ -111,6 +128,21 @@ class CPU:
                 self.reg[operand_a] = self.ram_read(self.sp + 1)
                 self.sp += 1
                 self.pc += 2
+            elif ir == cmp:
+                self.alu("CMP", operand_a, operand_b)
+                self.pc += 3
+            elif ir == jmp:
+                self.pc = self.reg[operand_a]
+            elif ir == jeq:
+                if self.fl == 0b00000001:
+                    self.pc = self.reg[operand_a]
+                else:
+                    self.pc += 2
+            elif ir == jne:
+                if self.fl != 0b00000001:
+                    self.pc = self.reg[operand_a]
+                else:
+                    self.pc += 2
             elif ir == hlt:
                 break
             else:
